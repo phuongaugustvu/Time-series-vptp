@@ -1,0 +1,303 @@
+---
+title: "Ban_cuoicung"
+always_allow_html: yes
+date: "2025-04-14"
+---
+
+```{r}
+library(readxl)
+library(tseries)
+library(forecast)
+library(urca)
+library(Metrics)
+library(ggplot2)
+library(TSstudio)
+```
+```{r}
+data_revenue = read_excel("D:/Quarterly_Revenue.xlsx", col_names = FALSE)
+ts_revenue = ts(data_revenue, start = c(2010, 1), frequency = 4)
+time = seq_along(ts_revenue)
+
+ts_plot(ts_revenue,
+        title = "",
+        Xtitle = "Năm",
+        Ytitle = "Doanh thu thuần (Tỷ VND)")
+
+```
+```{r}
+#Chia tap train va val
+train_revenue = ts_revenue[1:(length(ts_revenue) - 4)]
+test_revenue = ts_revenue[(length(ts_revenue) - 3):length(ts_revenue)]
+time_train = head(time, -4)
+time_test = tail(time, 4)
+ts_train = ts(train_revenue, start = c(2010, 1), frequency = 4)
+```
+```{r}
+#Lin-Lin
+model_lin_lin = lm(ts_train ~ time_train)
+summary(model_lin_lin)
+rmse(ts_train, fitted(model_lin_lin))
+mape(ts_train, fitted(model_lin_lin))
+
+future_data = data.frame(time_train = 57:60)
+forecast_lin_lin = predict(model_lin_lin, newdata = future_data)
+forecast_lin_lin
+rmse(test_revenue, forecast_lin_lin)
+mape(test_revenue, forecast_lin_lin)
+
+```
+```{r}
+#Lin-Log
+model_lin_log = lm(ts_train ~ log(time_train))
+summary(model_lin_log)
+rmse(ts_train, fitted(model_lin_log))
+mape(ts_train, fitted(model_lin_log))
+
+forecast_lin_log = predict(model_lin_log, newdata = future_data)
+forecast_lin_log
+rmse(test_revenue, forecast_lin_log)
+mape(test_revenue, forecast_lin_log)
+
+```
+```{r}
+#Log-Lin
+model_log_lin = lm(log(ts_train) ~ time_train)
+summary(model_log_lin)
+rmse(ts_train, exp(fitted(model_log_lin)))
+mape(ts_train, exp(fitted(model_log_lin)))
+
+forecast_log_lin = exp(predict(model_log_lin, newdata = future_data))
+forecast_log_lin
+rmse(test_revenue, forecast_log_lin)
+mape(test_revenue, forecast_log_lin)
+
+```
+```{r}
+#Log-Log
+model_log_log = lm(log(ts_train) ~ log(time_train))
+summary(model_log_log)
+rmse(ts_train, exp(fitted(model_log_log)))
+mape(ts_train, exp(fitted(model_log_log)))
+
+forecast_log_log = exp(predict(model_log_log, newdata = future_data))
+forecast_log_log
+rmse(test_revenue, forecast_log_log)
+mape(test_revenue, forecast_log_log)
+
+```
+```{r}
+#Dat bien gia mua vu
+season_q1 = c(rep(c(1, 0, 0, 0), 15))[1:56]
+season_q2 = c(rep(c(0, 1, 0, 0), 15))[1:56]
+season_q3 = c(rep(c(0, 0, 1, 0), 15))[1:56]
+season_q4 = c(rep(c(0, 0, 0, 1), 15))[1:56]
+
+```
+```{r}
+#Mua vu tuyen tinh dang cong
+model_season_add = lm(ts_train ~ time_train + season_q2 + season_q3 + season_q4)
+summary(model_season_add)
+rmse(ts_train, fitted(model_season_add))
+mape(ts_train, fitted(model_season_add))
+
+new_season_q2 = c(0,1,0,0)
+new_season_q3 = c(0,0,1,0)
+new_season_q4 = c(0,0,0,1)
+
+data_forecast_add = data.frame(
+  time_train = 57:60,
+  season_q2 = new_season_q2,
+  season_q3 = new_season_q3,
+  season_q4 = new_season_q4
+)
+
+forecast_season_add = predict(model_season_add, newdata = data_forecast_add)
+forecast_season_add
+rmse(test_revenue, forecast_season_add)
+mape(test_revenue, forecast_season_add)
+
+```
+```{r}
+#Mua vu tuyen tinh dang nhan
+interaction_q2 = time_train * season_q2
+interaction_q3 = time_train * season_q3
+interaction_q4 = time_train * season_q4
+
+model_season_mul = lm(ts_train ~ time_train + interaction_q2 + interaction_q3 + interaction_q4)
+summary(model_season_mul)
+rmse(ts_train, fitted(model_season_mul))
+mape(ts_train, fitted(model_season_mul))
+
+data_forecast_mul = data.frame(
+  time_train = 57:60,
+  interaction_q2 = 57:60 * new_season_q2,
+  interaction_q3 = 57:60 * new_season_q3,
+  interaction_q4 = 57:60 * new_season_q4
+)
+
+forecast_season_mul = predict(model_season_mul, newdata = data_forecast_mul)
+forecast_season_mul
+rmse(test_revenue, forecast_season_mul)
+mape(test_revenue, forecast_season_mul)
+
+```
+```{r}
+#HW mua vu dang cong
+model_hw_add = HoltWinters(ts_train, seasonal = "additive")
+rmse(ts_train, fitted(model_hw_add)[,1])
+mape(ts_train, fitted(model_hw_add)[,1])
+forecast_hw_add = forecast(model_hw_add, h = 4)
+forecast_hw_add$mean
+rmse(test_revenue, forecast_hw_add$mean)
+mape(test_revenue, forecast_hw_add$mean)
+
+```
+```{r}
+#HW mua vu dang nhan
+model_hw_mul = HoltWinters(ts_train, seasonal = "multiplicative")
+rmse(ts_train, fitted(model_hw_mul)[,1])
+mape(ts_train, fitted(model_hw_mul)[,1])
+forecast_hw_mul = forecast(model_hw_mul, h = 4)
+forecast_hw_mul$mean
+rmse(test_revenue, forecast_hw_mul$mean)
+mape(test_revenue, forecast_hw_mul$mean)
+
+```
+```{r}
+#Chon HW dang nhan la mo hinh tot nhat du bao
+model_hw_full = HoltWinters(ts_revenue, seasonal = "multiplicative")
+forecast_hw_2025 = forecast(model_hw_full, h = 4)
+forecast_hw_2025$mean
+
+```
+```{r}
+#Chuoi gia va loi suat
+data_price = read_excel("D:/VTO_PriceHistory.xlsx")
+price = ts(as.numeric(data_price$Price), start = 1, frequency = 1)
+
+plot(price, type = "l", col = "blue")
+
+log_return = diff(log(price)) * 100
+log_return = ts(log_return, start = 1, frequency = 1)
+
+plot(log_return, type = "l", col = "red")
+
+```
+```{r}
+#ADF
+summary(ur.df(price, type = "trend", selectlags = "AIC"))
+summary(ur.df(price, type = "drift", selectlags = "AIC"))
+summary(ur.df(price, type = "none", selectlags = "AIC"))
+
+```
+```{r}
+#ADF sai phan bac 1
+summary(ur.df(diff(price), type = "trend", selectlags = "AIC"))
+summary(ur.df(diff(price), type = "drift", selectlags = "AIC"))
+summary(ur.df(diff(price), type = "none", selectlags = "AIC"))
+
+```
+```{r}
+#Kiem tra bac AR,MA
+Acf(diff(price))
+Pacf(diff(price))
+
+```
+```{r}
+model_arima_5_13 = arima(price, c(5, 1, 13))
+summary(model_arima_5_13)
+autoplot(model_arima_5_13)
+checkresiduals(model_arima_5_13)
+
+```
+```{r}
+model_arima_5_5 = arima(price, c(5, 1, 5))
+summary(model_arima_5_5)
+autoplot(model_arima_5_5)
+checkresiduals(model_arima_5_5)
+
+```
+```{r}
+model_arima_13_5 = arima(price, c(13, 1, 5))
+summary(model_arima_13_5)
+autoplot(model_arima_13_5)
+checkresiduals(model_arima_13_5)
+```
+```{r}
+#So sanh voi thuc te
+fc_price = forecast(model_arima_5_5, h = 10)$mean
+price_real = c(14.8, 14.45, 13.9, 13.8, 14.15, 14.05, 13.8, 13.85, 13.8, 14.0)
+
+rmse(price_real, fc_price)
+mape(price_real, fc_price)
+
+df_plot_price = data.frame(tt = seq_along(price_real), price_real, fc_price)
+
+ggplot(df_plot_price, aes(x = tt)) +
+  geom_line(aes(y = price_real, color = "Giá thực tế"), linewidth = 2) +
+  geom_line(aes(y = fc_price, color = "Giá dự báo"), linewidth = 2) +
+  labs(title = "So sánh giá cổ phiếu dự báo và thực tế", x = "Time", y = "Price") +
+  scale_color_manual(values = c("Giá thực tế" = "blue", "Giá dự báo" = "red")) +
+  theme_minimal()
+
+```
+```{r}
+#ADF chuoi loi suat
+summary(ur.df(log_return, type = "trend", selectlags = "AIC"))
+summary(ur.df(log_return, type = "drift", selectlags = "AIC"))
+summary(ur.df(log_return, type = "none", selectlags = "AIC"))
+
+```
+```{r}
+#Kiem tra bac AR, MA
+Acf(log_return)
+Pacf(log_return)
+
+```
+```{r}
+model_ls_5_5 = arima(log_return, c(5, 0, 5))
+summary(model_ls_5_5)
+autoplot(model_ls_5_5)
+checkresiduals(model_ls_5_5)
+
+```
+```{r}
+model_ls_18_5 = arima(log_return, c(18, 0, 5))
+summary(model_ls_18_5)
+autoplot(model_ls_18_5)
+checkresiduals(model_ls_18_5)
+
+```
+```{r}
+model_ls_5_18 = arima(log_return, c(5, 0, 18))
+summary(model_ls_5_18)
+autoplot(model_ls_5_18)
+checkresiduals(model_ls_5_18)
+
+```
+```{r}
+model_ls_auto = auto.arima(log_return)
+summary(model_ls_auto)
+autoplot(model_ls_auto)
+checkresiduals(model_ls_auto)
+
+```
+```{r}
+#So sanh voi loi suat thuc te
+log_return_real = c(0.677968699, -2.393276621, -3.880557442, -0.722024797, 2.504603193,
+                    -0.709222831, -1.795380362, 0.361664047, -0.361664047, 1.438873745)
+
+fc_log_return = forecast(model_ls_5_5, h = 10)$mean
+
+rmse(log_return_real, fc_log_return)
+smape(log_return_real, fc_log_return)
+df_plot_return = data.frame(tl = seq_along(log_return_real), log_return_real, fc_log_return)
+
+ggplot(df_plot_return, aes(x = tl)) +
+  geom_line(aes(y = log_return_real, color = "Lợi suất thực tế"), linewidth = 1) +
+  geom_line(aes(y = fc_log_return, color = "Lợi suất dự báo"), linewidth = 1) +
+  labs(title = "So sánh chuỗi log return dự báo và thực tế", x = "Time", y = "Log return") +
+  scale_color_manual(values = c("Lợi suất thực tế" = "blue", "Lợi suất dự báo" = "red")) +
+  theme_minimal()
+
+```
